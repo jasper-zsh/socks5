@@ -21,7 +21,9 @@ type UDPAssociateConn struct {
 	udpConn   *net.UDPConn
 	udpAddr   *net.UDPAddr
 
-	lock sync.Mutex
+	lock    sync.Mutex
+	ticker  *time.Ticker
+	counter uint64
 }
 
 func NewUDPAssociateConn(proxyAddr string, localAddr *net.UDPAddr) *UDPAssociateConn {
@@ -34,6 +36,10 @@ func NewUDPAssociateConn(proxyAddr string, localAddr *net.UDPAddr) *UDPAssociate
 func (u *UDPAssociateConn) disconnect() {
 	u.lock.Lock()
 	defer u.lock.Unlock()
+	if u.ticker != nil {
+		u.ticker.Stop()
+	}
+	u.counter = 0
 	if u.udpConn != nil {
 		u.udpConn.Close()
 		u.udpConn = nil
@@ -86,6 +92,16 @@ func (u *UDPAssociateConn) connect() error {
 			IP:   res.BindAddr[:],
 			Port: int(res.BindPort),
 		}
+		u.ticker = time.NewTicker(time.Second * 10)
+		go func() {
+			for _ = range u.ticker.C {
+				if u.counter == 0 {
+					u.disconnect()
+				} else {
+					u.counter = 0
+				}
+			}
+		}()
 		return nil
 	case ReplyCommandNotSupported:
 		return errors.New("udp associate not supported")
@@ -115,6 +131,7 @@ func (u *UDPAssociateConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 		u.disconnect()
 		return
 	}
+	u.counter += 1
 
 	hdr := UDPRequestHeader{}
 	err = binary.Read(bytes.NewBuffer(buf), binary.BigEndian, &hdr)
@@ -167,6 +184,7 @@ func (u *UDPAssociateConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 		u.disconnect()
 		return
 	}
+	u.counter += 1
 	n = len(p)
 	return
 }
