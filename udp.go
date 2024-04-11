@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"net"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
@@ -13,30 +14,59 @@ import (
 var _ net.PacketConn = (*UDPAssociateConn)(nil)
 
 type UDPAssociateConn struct {
+	socksConnection
+	addr      string
+	localAddr *net.UDPAddr
 	socksConn net.Conn
 	udpConn   *net.UDPConn
 	udpAddr   *net.UDPAddr
+
+	lock sync.Mutex
 }
 
-func NewUDPAssociateConn(socksConn net.Conn) *UDPAssociateConn {
+func NewUDPAssociateConn(proxyAddr string, localAddr *net.UDPAddr) *UDPAssociateConn {
 	return &UDPAssociateConn{
-		socksConn: socksConn,
+		addr:      proxyAddr,
+		localAddr: localAddr,
 	}
 }
 
-func (u *UDPAssociateConn) connect(localAddr *net.UDPAddr) error {
+func (u *UDPAssociateConn) disconnect() {
+	u.lock.Lock()
+	defer u.lock.Unlock()
+	if u.udpConn != nil {
+		u.udpConn.Close()
+		u.udpConn = nil
+	}
+	if u.socksConn != nil {
+		u.socksConn.Close()
+		u.socksConn = nil
+	}
+}
+
+func (u *UDPAssociateConn) connect() error {
+	var err error
+	u.lock.Lock()
+	defer u.lock.Unlock()
+	if u.udpConn != nil {
+		return nil
+	}
+	u.socksConn, err = u.negotiate(u.addr)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	ip := [4]byte{}
-	if localAddr.IP != nil {
-		ip = localAddr.AddrPort().Addr().As4()
+	if u.localAddr.IP != nil {
+		ip = u.localAddr.AddrPort().Addr().As4()
 	}
 	req := Request{
 		Version:  Version5,
 		Command:  CommandUDPAssociate,
 		AddrType: AddrTypeIPv4,
 		DstAddr:  ip,
-		DstPort:  uint16(localAddr.Port),
+		DstPort:  uint16(u.localAddr.Port),
 	}
-	err := binary.Write(u.socksConn, binary.BigEndian, req)
+	err = binary.Write(u.socksConn, binary.BigEndian, req)
 	if err != nil {
 		u.socksConn.Close()
 		return errors.Trace(err)
@@ -48,7 +78,7 @@ func (u *UDPAssociateConn) connect(localAddr *net.UDPAddr) error {
 	}
 	switch res.Reply {
 	case ReplySucceed:
-		u.udpConn, err = net.ListenUDP("udp", localAddr)
+		u.udpConn, err = net.ListenUDP("udp", u.localAddr)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -70,10 +100,19 @@ var (
 
 // ReadFrom implements net.PacketConn.
 func (u *UDPAssociateConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	if u.udpConn == nil {
+		err = u.connect()
+		if err != nil {
+			err = errors.Trace(err)
+			u.disconnect()
+			return
+		}
+	}
 	buf := make([]byte, len(p))
 	n, _, err = u.udpConn.ReadFrom(buf)
 	if err != nil {
 		err = errors.Trace(err)
+		u.disconnect()
 		return
 	}
 
@@ -95,6 +134,14 @@ func (u *UDPAssociateConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 
 // WriteTo implements net.PacketConn.
 func (u *UDPAssociateConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	if u.udpConn == nil {
+		err = u.connect()
+		if err != nil {
+			err = errors.Trace(err)
+			u.disconnect()
+			return
+		}
+	}
 	var addrPort netip.AddrPort
 	addrPort, err = netip.ParseAddrPort(addr.String())
 	if err != nil {
@@ -117,6 +164,7 @@ func (u *UDPAssociateConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	_, err = u.udpConn.WriteTo(buf.Bytes(), u.udpAddr)
 	if err != nil {
 		err = errors.Trace(err)
+		u.disconnect()
 		return
 	}
 	n = len(p)
@@ -125,11 +173,7 @@ func (u *UDPAssociateConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 
 // Close implements net.Conn.
 func (u *UDPAssociateConn) Close() error {
-	err := u.udpConn.Close()
-	err = u.socksConn.Close()
-	if err != nil {
-		return errors.Trace(err)
-	}
+	u.disconnect()
 	return nil
 }
 
