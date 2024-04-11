@@ -12,11 +12,11 @@ func TestUDPAssociate(t *testing.T) {
 		Addr: "100.64.0.9:41080",
 	})
 	sAddr := &net.UDPAddr{
-		IP:   []byte{0, 0, 0, 0},
+		IP:   net.IPv4zero,
 		Port: 22344,
 	}
 	cAddr := &net.UDPAddr{
-		IP:   []byte{0, 0, 0, 0},
+		IP:   net.IPv4zero,
 		Port: 22345,
 	}
 	s, err := proxy.UDPAssociate(sAddr)

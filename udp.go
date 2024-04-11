@@ -24,11 +24,15 @@ func NewUDPAssociateConn(socksConn net.Conn) *UDPAssociateConn {
 }
 
 func (u *UDPAssociateConn) connect(localAddr *net.UDPAddr) error {
+	ip := [4]byte{}
+	if localAddr.IP != nil {
+		ip = localAddr.AddrPort().Addr().As4()
+	}
 	req := Request{
 		Version:  Version5,
 		Command:  CommandUDPAssociate,
 		AddrType: AddrTypeIPv4,
-		DstAddr:  localAddr.AddrPort().Addr().As4(),
+		DstAddr:  ip,
 		DstPort:  uint16(localAddr.Port),
 	}
 	err := binary.Write(u.socksConn, binary.BigEndian, req)
