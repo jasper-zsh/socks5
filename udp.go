@@ -22,9 +22,8 @@ type UDPAssociateConn struct {
 	udpConn   *net.UDPConn
 	udpAddr   *net.UDPAddr
 
-	lock    sync.Mutex
-	ticker  *time.Ticker
-	counter uint64
+	lock   sync.Mutex
+	ticker *time.Ticker
 }
 
 func NewUDPAssociateConn(proxyAddr string, localAddr *net.UDPAddr) *UDPAssociateConn {
@@ -41,7 +40,6 @@ func (u *UDPAssociateConn) disconnect() {
 		u.ticker.Stop()
 		u.ticker = nil
 	}
-	u.counter = 0
 	if u.udpConn != nil {
 		u.udpConn.Close()
 		u.udpConn = nil
@@ -97,23 +95,21 @@ func (u *UDPAssociateConn) connect() error {
 		u.ticker = time.NewTicker(time.Second * 10)
 		go func() {
 			detectBuf := make([]byte, 4096)
-			for _ = range u.ticker.C {
-				err := u.socksConn.SetReadDeadline(time.Now())
-				if err != nil {
-					log.Printf("failed to set read deadline: %+v", err)
-					u.disconnect()
-					return
-				}
-				_, err = u.socksConn.Read(detectBuf)
-				if err != nil {
-					log.Printf("connection closed: %+v", err)
-					u.disconnect()
-					return
-				}
-				if u.counter == 0 {
-					u.disconnect()
-				} else {
-					u.counter = 0
+			for {
+				select {
+				case <-u.ticker.C:
+					err := u.socksConn.SetReadDeadline(time.Now())
+					if err != nil {
+						log.Printf("failed to set read deadline: %+v", err)
+						u.disconnect()
+						return
+					}
+					_, err = u.socksConn.Read(detectBuf)
+					if neterr, ok := err.(net.Error); !ok || !neterr.Timeout() {
+						log.Printf("connection closed: %+v", err)
+						u.disconnect()
+						return
+					}
 				}
 			}
 		}()
@@ -146,7 +142,6 @@ func (u *UDPAssociateConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 		u.disconnect()
 		return
 	}
-	u.counter += 1
 
 	hdr := UDPRequestHeader{}
 	err = binary.Read(bytes.NewBuffer(buf), binary.BigEndian, &hdr)

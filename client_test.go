@@ -34,27 +34,34 @@ func TestKeepalive(t *testing.T) {
 	if !assert.NotNil(t, c) {
 		return
 	}
+
+	send := func() {
+		payload := []byte("foo")
+		n, err := c.WriteTo(payload, net.UDPAddrFromAddrPort(sAddr))
+		if !assert.NoError(t, err) {
+			return
+		}
+		if !assert.Equal(t, len(payload), n) {
+			return
+		}
+		buf := make([]byte, 4096)
+		n, _, err = s.ReadFrom(buf)
+		if !assert.NoError(t, err) {
+			return
+		}
+		if !assert.Equal(t, len(payload), n) {
+			return
+		}
+		if !assert.Equal(t, payload[:n], buf[:n]) {
+			return
+		}
+	}
+
+	send()
+
 	time.Sleep(20 * time.Second)
 
-	payload := []byte("foo")
-	n, err := c.WriteTo(payload, net.UDPAddrFromAddrPort(sAddr))
-	if !assert.NoError(t, err) {
-		return
-	}
-	if !assert.Equal(t, len(payload), n) {
-		return
-	}
-	buf := make([]byte, 4096)
-	n, _, err = s.ReadFrom(buf)
-	if !assert.NoError(t, err) {
-		return
-	}
-	if !assert.Equal(t, len(payload), n) {
-		return
-	}
-	if !assert.Equal(t, payload[:n], buf[:n]) {
-		return
-	}
+	send()
 }
 
 func TestUDPAssociate(t *testing.T) {
