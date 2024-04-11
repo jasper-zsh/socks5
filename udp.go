@@ -71,12 +71,22 @@ var (
 // ReadFrom implements net.PacketConn.
 func (u *UDPAssociateConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	buf := make([]byte, len(p))
-	n, addr, err = u.udpConn.ReadFrom(buf)
+	n, _, err = u.udpConn.ReadFrom(buf)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
+	hdr := UDPRequestHeader{}
+	err = binary.Read(bytes.NewBuffer(buf), binary.BigEndian, &hdr)
+	if err != nil {
+		err = errors.Trace(err)
+		return
+	}
+	addr = &net.UDPAddr{
+		IP:   hdr.DstAddr[:],
+		Port: int(hdr.DstPort),
+	}
 	actualLen := n - headerSize
 	copy(p, buf[headerSize:n])
 	n = actualLen

@@ -46,11 +46,34 @@ func TestUDPAssociate(t *testing.T) {
 		return
 	}
 	buf := make([]byte, 4096)
-	n, _, err = s.ReadFrom(buf)
+	n, addr, err := s.ReadFrom(buf)
 	if !assert.NoError(t, err) {
 		return
 	}
 	if !assert.Equal(t, len(payload), n) {
+		return
+	}
+	if !assert.Equal(t, payload[:n], buf[:n]) {
+		return
+	}
+
+	payload = []byte("bar")
+	n, err = s.WriteTo(payload, addr)
+	if !assert.NoError(t, err) {
+		return
+	}
+	if !assert.Equal(t, len(payload), n) {
+		return
+	}
+
+	n, _, err = c.ReadFrom(buf)
+	if !assert.NoError(t, err) {
+		return
+	}
+	if !assert.Equal(t, len(payload), n) {
+		return
+	}
+	if !assert.Equal(t, payload[:n], buf[:n]) {
 		return
 	}
 }
