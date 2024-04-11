@@ -184,7 +184,6 @@ func (u *UDPAssociateConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 		u.disconnect()
 		return
 	}
-	u.counter += 1
 	n = len(p)
 	return
 }
