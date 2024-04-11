@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
+	"net/netip"
+	"time"
 
 	"github.com/juju/errors"
 )
@@ -11,9 +13,23 @@ import (
 type socksConnection struct {
 }
 
-func (c *socksConnection) negotiate(addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", addr)
+func (c *socksConnection) negotiate(addr string) (*net.TCPConn, error) {
+	addrPort, err := netip.ParseAddrPort(addr)
 	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	conn, err := net.DialTCP("tcp", nil, net.TCPAddrFromAddrPort(addrPort))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	err = conn.SetKeepAlive(true)
+	if err != nil {
+		conn.Close()
+		return nil, errors.Trace(err)
+	}
+	err = conn.SetKeepAlivePeriod(10 * time.Second)
+	if err != nil {
+		conn.Close()
 		return nil, errors.Trace(err)
 	}
 	hdr := MethodSelectionRequestHeader{

@@ -3,6 +3,7 @@ package socks5
 import (
 	"bytes"
 	"encoding/binary"
+	"log"
 	"net"
 	"net/netip"
 	"sync"
@@ -17,7 +18,7 @@ type UDPAssociateConn struct {
 	socksConnection
 	addr      string
 	localAddr *net.UDPAddr
-	socksConn net.Conn
+	socksConn *net.TCPConn
 	udpConn   *net.UDPConn
 	udpAddr   *net.UDPAddr
 
@@ -95,7 +96,20 @@ func (u *UDPAssociateConn) connect() error {
 		}
 		u.ticker = time.NewTicker(time.Second * 10)
 		go func() {
+			detectBuf := make([]byte, 4096)
 			for _ = range u.ticker.C {
+				err := u.socksConn.SetReadDeadline(time.Now())
+				if err != nil {
+					log.Printf("failed to set read deadline: %+v", err)
+					u.disconnect()
+					return
+				}
+				_, err = u.socksConn.Read(detectBuf)
+				if err != nil {
+					log.Printf("connection closed: %+v", err)
+					u.disconnect()
+					return
+				}
 				if u.counter == 0 {
 					u.disconnect()
 				} else {
