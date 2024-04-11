@@ -38,6 +38,7 @@ func (u *UDPAssociateConn) disconnect() {
 	defer u.lock.Unlock()
 	if u.ticker != nil {
 		u.ticker.Stop()
+		u.ticker = nil
 	}
 	u.counter = 0
 	if u.udpConn != nil {
