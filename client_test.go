@@ -2,6 +2,7 @@ package socks5
 
 import (
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,15 +12,17 @@ func TestUDPAssociate(t *testing.T) {
 	proxy := NewClient(ClientOptions{
 		Addr: "100.64.0.9:41080",
 	})
-	sAddr := &net.UDPAddr{
-		IP:   net.IPv4zero,
-		Port: 22344,
-	}
+	// sAddr := &net.UDPAddr{
+	// 	IP:   net.IPv4zero,
+	// 	Port: 22344,
+	// }
+	sAddr, _ := netip.ParseAddrPort("100.64.0.12:22344")
 	cAddr := &net.UDPAddr{
 		IP:   net.IPv4zero,
 		Port: 22345,
 	}
-	s, err := proxy.UDPAssociate(sAddr)
+
+	s, err := net.ListenUDP("udp", net.UDPAddrFromAddrPort(sAddr))
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -35,7 +38,7 @@ func TestUDPAssociate(t *testing.T) {
 		return
 	}
 	payload := []byte("foo")
-	n, err := c.WriteTo(payload, sAddr)
+	n, err := c.WriteTo(payload, net.UDPAddrFromAddrPort(sAddr))
 	if !assert.NoError(t, err) {
 		return
 	}

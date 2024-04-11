@@ -15,6 +15,7 @@ var _ net.PacketConn = (*UDPAssociateConn)(nil)
 type UDPAssociateConn struct {
 	socksConn net.Conn
 	udpConn   *net.UDPConn
+	udpAddr   *net.UDPAddr
 }
 
 func NewUDPAssociateConn(socksConn net.Conn) *UDPAssociateConn {
@@ -50,6 +51,10 @@ func (u *UDPAssociateConn) connect(localAddr *net.UDPAddr) error {
 		u.udpConn, err = net.ListenUDP("udp", localAddr)
 		if err != nil {
 			return errors.Trace(err)
+		}
+		u.udpAddr = &net.UDPAddr{
+			IP:   res.BindAddr[:],
+			Port: int(res.BindPort),
 		}
 		return nil
 	case ReplyCommandNotSupported:
@@ -99,7 +104,7 @@ func (u *UDPAssociateConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 		return
 	}
 	buf.Write(p)
-	_, err = u.udpConn.WriteTo(buf.Bytes(), addr)
+	_, err = u.udpConn.WriteTo(buf.Bytes(), u.udpAddr)
 	if err != nil {
 		err = errors.Trace(err)
 		return
