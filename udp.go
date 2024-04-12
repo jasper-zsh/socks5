@@ -75,17 +75,22 @@ func (u *UDPAssociateConn) connect() error {
 	err = binary.Write(u.socksConn, binary.BigEndian, req)
 	if err != nil {
 		u.socksConn.Close()
+		u.socksConn = nil
 		return errors.Trace(err)
 	}
 	res := Reply{}
 	err = binary.Read(u.socksConn, binary.BigEndian, &res)
 	if err != nil {
+		u.socksConn.Close()
+		u.socksConn = nil
 		return errors.Trace(err)
 	}
 	switch res.Reply {
 	case ReplySucceed:
 		u.udpConn, err = net.ListenUDP("udp", u.localAddr)
 		if err != nil {
+			u.socksConn.Close()
+			u.socksConn = nil
 			return errors.Trace(err)
 		}
 		u.udpAddr = &net.UDPAddr{
@@ -115,8 +120,12 @@ func (u *UDPAssociateConn) connect() error {
 		}()
 		return nil
 	case ReplyCommandNotSupported:
+		u.socksConn.Close()
+		u.socksConn = nil
 		return errors.New("udp associate not supported")
 	default:
+		u.socksConn.Close()
+		u.socksConn = nil
 		return errors.Errorf("socks error %x", res.Reply)
 	}
 }

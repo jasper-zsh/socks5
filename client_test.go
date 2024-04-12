@@ -9,11 +9,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	localAddr = "100.64.0.11:22344"
+)
+
 func TestKeepalive(t *testing.T) {
 	proxy := NewClient(ClientOptions{
 		Addr: "100.64.0.9:41080",
 	})
-	sAddr, _ := netip.ParseAddrPort("100.64.0.12:22344")
+	sAddr, _ := netip.ParseAddrPort(localAddr)
 	cAddr := &net.UDPAddr{
 		IP:   net.IPv4zero,
 		Port: 22345,
@@ -72,7 +76,7 @@ func TestUDPAssociate(t *testing.T) {
 	// 	IP:   net.IPv4zero,
 	// 	Port: 22344,
 	// }
-	sAddr, _ := netip.ParseAddrPort("100.64.0.12:22344")
+	sAddr, _ := netip.ParseAddrPort(localAddr)
 	cAddr := &net.UDPAddr{
 		IP:   net.IPv4zero,
 		Port: 22345,
