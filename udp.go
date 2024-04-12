@@ -36,6 +36,7 @@ func NewUDPAssociateConn(proxyAddr string, localAddr *net.UDPAddr) *UDPAssociate
 func (u *UDPAssociateConn) disconnect() {
 	u.lock.Lock()
 	defer u.lock.Unlock()
+	log.Println("disconnecting socks5 udp associate")
 	if u.ticker != nil {
 		u.ticker.Stop()
 		u.ticker = nil
@@ -54,6 +55,7 @@ func (u *UDPAssociateConn) connect() error {
 	var err error
 	u.lock.Lock()
 	defer u.lock.Unlock()
+	log.Println("connecting socks5 udp associate")
 	if u.udpConn != nil {
 		return nil
 	}
